@@ -212,3 +212,4 @@ mqtt_test.py
 mqtt_test2.py
 
 .idea
+static/*

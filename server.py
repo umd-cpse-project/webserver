@@ -69,6 +69,9 @@ def connect(client: MQTTClient, _flags: int, _rc: int, _properties: Any):
 async def message(client: MQTTClient, topic: str, payload: bytes, _qos, _properties):
     if topic.startswith('/webcam'):
         try:
+            with open(f'static/last_webcam_update.jpg', 'wb') as fp:
+                fp.write(payload)
+                
             image = Image.open(BytesIO(payload)).convert('RGB')
             if manifest := await db.fetch_manifest():
                 response = await asyncio.to_thread(manifest.categorize, image)

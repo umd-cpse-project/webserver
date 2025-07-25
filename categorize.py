@@ -113,7 +113,7 @@ class CategoryManifest(NamedTuple):
         inputs = clip.tokenize([c.context or c.name for c in categories]).to("cpu")
         return cls(categories, inputs)
 
-    def categorize(self, image: Image.Image) -> CategorizationResponse:
+    def categorize(self, image: Image.Image) -> list[CategorizationResponse]:
         # Load and preprocess the image
         img = preprocess(image).unsqueeze(0).to("cpu")
 
@@ -127,11 +127,8 @@ class CategoryManifest(NamedTuple):
             text_features /= text_features.norm(dim=-1, keepdim=True)
 
             # Compute similarity
-            similarity = (image_features @ text_features.T).squeeze(0)
-
-            # Get best match
-            probs = similarity.softmax(dim=0)
-            conf, idx = probs.max(0)
+            similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)[0]
+            conf, idx = similarity.max(0)
 
         return CategorizationResponse(self.categories[idx.item()], conf.item())
 

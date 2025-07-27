@@ -69,9 +69,6 @@ def connect(client: MQTTClient, _flags: int, _rc: int, _properties: Any):
 async def message(client: MQTTClient, topic: str, payload: bytes, _qos, _properties):
     if topic.startswith('/webcam'):
         try:
-            with open(f'static/last_webcam_update.jpg', 'wb') as fp:
-                fp.write(payload)
-                
             image = Image.open(BytesIO(payload)).convert('RGB')
             if manifest := await db.fetch_manifest():
                 response = await asyncio.to_thread(manifest.categorize, image)
@@ -81,9 +78,12 @@ async def message(client: MQTTClient, topic: str, payload: bytes, _qos, _propert
                 )            
                 payload = msgpack.dumps(response.to_dict())
                 client.publish('/categorization', payload)
-                
+
         except Exception as e:
             log.error(f"Error processing image from topic '{topic}': {e}")
+            payload = {'error': str(e), 'context': 'process webcam image'}
+            client.publish('/error/categorization', msgpack.dumps(payload))
+
     return 0
 
 
@@ -110,13 +110,25 @@ async def root():
     return {'message': 'Hello, world!'}
 
 
+@app.get('/login')
+async def login(
+    _: Annotated[Any, AuthorizationRequired()],
+):
+    """Endpoint to verify the web access password, and returns MQTT broker connection (over socket) details."""
+    return {
+        'mqtt_connect_url': os.getenv('MQTT_WEB_BROKER'),
+        'mqtt_username': mqtt.config.username,
+        'mqtt_password': mqtt.config.password,
+    }
+
+
 @app.post('/categorize')
 async def categorize(
     _: Annotated[Any, AuthorizationRequired()],
-    file: bytes = File(min_length=0, max_length=MAX_FILE_SIZE),
+    image: bytes = File(min_length=0, max_length=MAX_FILE_SIZE),
 ):
     """Takes a multipart image upload and returns a categorization response."""
-    image = Image.open(BytesIO(file)).convert('RGB')
+    image = Image.open(BytesIO(image)).convert('RGB')
     if image.width < MIN_IMAGE_DIMENSION or image.height < MIN_IMAGE_DIMENSION:
         raise RequestValidationError(
             f"Image dimensions must be at least {MIN_IMAGE_DIMENSION}x{MIN_IMAGE_DIMENSION} pixels."
@@ -174,6 +186,35 @@ class EditCategoryPayload(pydantic.BaseModel):
     hue: int | None = None
 
 
+async def validate_category_payload(
+    payload: CreateCategoryPayload | EditCategoryPayload,
+    *,
+    category_id: int | None = None,
+) -> None:
+    if payload.name is not None and not (1 <= len(payload.name) <= 50):
+        raise RequestValidationError("Category name must be between 1 and 50 characters long.")
+    if payload.context is not None and not (1 <= len(payload.context) <= 1000):
+        raise RequestValidationError("Category context must be between 1 and 1000 characters long.")
+    if payload.x is not None and not (0 <= payload.x < 16):
+        raise RequestValidationError("X position must be between 0 and 15.")
+    if payload.y is not None and not (0 <= payload.y < 12):
+        raise RequestValidationError("Y position must be between 0 and 11.")
+    if payload.width is not None and not (1 <= payload.width <= 16):
+        raise RequestValidationError("Width must be between 1 and 16.")
+    if payload.height is not None and not (1 <= payload.height <= 12):
+        raise RequestValidationError("Height must be between 1 and 12.")
+    
+    # check if out of bounds
+    old = await db.fetch_category(category_id) if category_id is not None else payload
+    true_x = payload.x if payload.x is not None else old.x
+    true_y = payload.y if payload.y is not None else old.y
+    true_width = payload.width if payload.width is not None else old.width
+    true_height = payload.height if payload.height is not None else old.height
+    
+    if true_x + true_width > 16 or true_y + true_height > 12:
+        raise RequestValidationError("Category position and size must fit within the 16x12 grid.")
+
+
 @app.post('/categories', status_code=201)
 async def create_category(
     _: Annotated[Any, AuthorizationRequired()],
@@ -184,6 +225,7 @@ async def create_category(
     if graphic and len(graphic) > MAX_GRAPHIC_SIZE:
         raise RequestValidationError(f"Graphic size must not exceed {MAX_GRAPHIC_SIZE} bytes.")
 
+    await validate_category_payload(payload)
     category = await db.create_category(
         name=payload.name,
         context=payload.context,
@@ -205,6 +247,7 @@ async def edit_category(
     
     Note: both `x` and `y` must be provided together, as well as `width` and `height`.
     """
+    await validate_category_payload(payload, category_id=category_id)
     category = await db.edit_category(
         category_id,
         name=payload.name,
@@ -239,9 +282,13 @@ async def delete_category(
 @app.patch('/categories', status_code=200)
 async def set_categories(
     _: Annotated[Any, AuthorizationRequired()],
-    payload: list[EditCategoryPayload],
+    payload: list[CreateCategoryPayload],
 ):
     """Clears all categories and replaces them with the provided list of categories."""
+    if not payload:
+        raise RequestValidationError("Payload must contain at least one category.")
+    for item in payload:
+        await validate_category_payload(item)
     return [c.to_dict() for c in await db.set_categories(payload)]
 
 

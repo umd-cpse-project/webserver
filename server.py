@@ -193,8 +193,8 @@ async def validate_category_payload(
 ) -> None:
     if payload.name is not None and not (1 <= len(payload.name) <= 50):
         raise RequestValidationError("Category name must be between 1 and 50 characters long.")
-    if payload.context is not None and not (1 <= len(payload.context) <= 1000):
-        raise RequestValidationError("Category context must be between 1 and 1000 characters long.")
+    if payload.context is not None and len(payload.context) > 1000:
+        raise RequestValidationError("Category context cannot exceed 1000 characters.")
     if payload.x is not None and not (0 <= payload.x < 16):
         raise RequestValidationError("X position must be between 0 and 15.")
     if payload.y is not None and not (0 <= payload.y < 12):

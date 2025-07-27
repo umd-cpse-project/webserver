@@ -49,7 +49,10 @@ class DbConnection:
         """Close the database connection."""
         return self._inner.close()
 
-    async def fetch_categories(self) -> list[Category]:
+    async def fetch_categories(self, *, respect_cache: bool = True) -> list[Category]:
+        if respect_cache and self._cached:
+            return list(self._cached.values())
+
         await self.wait()
         await self.cursor.execute('SELECT * FROM categories')
         rows = await self.cursor.fetchall()

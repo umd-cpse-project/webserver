@@ -25,6 +25,9 @@ MAX_FILE_SIZE: Final[int] = 10 * 1024 * 1024  # 10 MB
 MAX_GRAPHIC_SIZE: Final[int] = 2 * 1024 * 1024  # 2 MB
 MIN_IMAGE_DIMENSION: Final[int] = 64  # 64 pixels
 
+BOARD_WIDTH: Final[int] = 32
+BOARD_HEIGHT: Final[int] = 24
+
 load_dotenv()
 TOKEN = os.getenv('AUTHORIZATION_TOKEN')
 WEB_ACCESS_PASSWORD = os.getenv('WEB_ACCESS_PASSWORD')
@@ -195,14 +198,14 @@ async def validate_category_payload(
         raise RequestValidationError("Category name must be between 1 and 50 characters long.")
     if payload.context is not None and len(payload.context) > 1000:
         raise RequestValidationError("Category context cannot exceed 1000 characters.")
-    if payload.x is not None and not (0 <= payload.x < 16):
-        raise RequestValidationError("X position must be between 0 and 15.")
-    if payload.y is not None and not (0 <= payload.y < 12):
-        raise RequestValidationError("Y position must be between 0 and 11.")
-    if payload.width is not None and not (1 <= payload.width <= 16):
-        raise RequestValidationError("Width must be between 1 and 16.")
-    if payload.height is not None and not (1 <= payload.height <= 12):
-        raise RequestValidationError("Height must be between 1 and 12.")
+    if payload.x is not None and not (0 <= payload.x < BOARD_WIDTH):
+        raise RequestValidationError(f"X position must be between 0 and {BOARD_WIDTH - 1}.")
+    if payload.y is not None and not (0 <= payload.y < BOARD_HEIGHT):
+        raise RequestValidationError(f"Y position must be between 0 and {BOARD_HEIGHT - 1}.")
+    if payload.width is not None and not (1 <= payload.width <= BOARD_WIDTH):
+        raise RequestValidationError(f"Width must be between 1 and {BOARD_WIDTH}.")
+    if payload.height is not None and not (1 <= payload.height <= BOARD_HEIGHT):
+        raise RequestValidationError(f"Height must be between 1 and {BOARD_HEIGHT}.")
     
     # check if out of bounds
     old = await db.fetch_category(category_id) if category_id is not None else payload
@@ -211,8 +214,10 @@ async def validate_category_payload(
     true_width = payload.width if payload.width is not None else old.width
     true_height = payload.height if payload.height is not None else old.height
     
-    if true_x + true_width > 16 or true_y + true_height > 12:
-        raise RequestValidationError("Category position and size must fit within the 16x12 grid.")
+    if true_x + true_width > BOARD_WIDTH or true_y + true_height > BOARD_HEIGHT:
+        raise RequestValidationError(
+            f"Category position and size must fit within the {BOARD_WIDTH}x{BOARD_HEIGHT} grid."
+        )
 
 
 @app.post('/categories', status_code=201)

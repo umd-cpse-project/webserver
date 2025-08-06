@@ -9,3 +9,4 @@ pydantic
 aiosqlite
 msgpack
 python-dotenv
+uvicorn

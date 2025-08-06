@@ -10,7 +10,7 @@ from aiosqlite import Row
 from PIL import Image
 
 # Load the model (once)
-model, preprocess = clip.load("ViT-B/32", device="cpu")
+model, preprocess = clip.load("ViT-L/14", device="cpu")
 
 __all__ = (
     'Category', 
@@ -113,7 +113,7 @@ class CategoryManifest(NamedTuple):
         inputs = clip.tokenize([c.context or c.name for c in categories]).to("cpu")
         return cls(categories, inputs)
 
-    def categorize(self, image: Image.Image) -> list[CategorizationResponse]:
+    def categorize(self, image: Image.Image) -> CategorizationResponse:
         # Load and preprocess the image
         img = preprocess(image).unsqueeze(0).to("cpu")
 

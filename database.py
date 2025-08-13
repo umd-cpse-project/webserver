@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from os import getenv
 from typing import Awaitable, TYPE_CHECKING
 
 import aiosqlite
@@ -18,7 +19,7 @@ __all__ = ('DbConnection',)
 class DbConnection:
     """Manages a connection to the SQL database."""
 
-    DB = 'categories.db'
+    DB = getenv('DATABASE', 'categories.db')
     SCHEMA = 'schema.sql'
     
     def __init__(self) -> None:

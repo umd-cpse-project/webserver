@@ -3,7 +3,7 @@ ftfy
 regex
 tqdm
 git+https://github.com/openai/CLIP.git
-fastapi
+fastapi[standard]
 fastapi-mqtt
 pydantic
 aiosqlite
